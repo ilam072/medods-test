@@ -29,8 +29,30 @@ func (r *UserRepo) Create(ctx context.Context, user types.User) error {
 	return err
 }
 
+func (r *UserRepo) GetUserByCreds(ctx context.Context, email string, password string) (*types.User, error) {
+	user := types.User{}
+
+	query := `SELECT user_id, email, password 
+			  FROM users
+	          WHERE email = $1 AND password = $2`
+
+	if err := r.pool.QueryRow(ctx, query, email, password).Scan(
+		&user.UserId,
+		&user.Email,
+		&user.Password,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf(`SQL: GetUserByCreds: Scan(): %w`, err)
+	}
+
+	return &user, nil
+}
+
 func (r *UserRepo) GetUserByID(ctx context.Context, userId int) (*types.User, error) {
 	user := types.User{}
+
 	query := `SELECT email, password
               FROM users
               WHERE user_id = $1`
