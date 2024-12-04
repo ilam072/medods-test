@@ -2,6 +2,7 @@ package types
 
 type User struct {
 	UserId   int
+	UserUUID string
 	Email    string
 	Password string
 }
@@ -13,6 +14,6 @@ type UserDTO struct {
 }
 
 type UserSignInDTO struct {
-	email    string
-	password string
+	Email    string
+	Password string
 }

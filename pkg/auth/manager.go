@@ -16,12 +16,13 @@ var (
 
 type TokenClaims struct {
 	jwt.RegisteredClaims
-	IP string `json:"ip"`
+	IP        string `json:"ip"`
+	SessionId string
 }
 
 type TokenManager interface {
-	NewJWT(userId string, userIP string, ttl time.Duration) (string, error)
-	ParseToken(accessToken string) (string, string, error)
+	NewJWT(sessionId, userId, userIP string, ttl time.Duration) (string, error)
+	ParseToken(accessToken string) (string, string, string, error)
 	NewRefreshToken() (string, error)
 	HashToken(refreshToken string) (string, error)
 }
@@ -37,20 +38,21 @@ func New(signingKey string) (*Manager, error) {
 	return &Manager{signingKey: signingKey}, nil
 }
 
-func (m *Manager) NewJWT(userId string, userIP string, ttl time.Duration) (string, error) {
+func (m *Manager) NewJWT(sessionId, userId, userIP string, ttl time.Duration) (string, error) {
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS512, TokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Subject:   userId,
 		},
-		IP: userIP,
+		IP:        userIP,
+		SessionId: sessionId,
 	})
 
 	return jwtToken.SignedString([]byte(m.signingKey))
 }
 
-func (m *Manager) ParseToken(accessToken string) (string, string, error) {
+func (m *Manager) ParseToken(accessToken string) (string, string, string, error) {
 	token, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -59,15 +61,15 @@ func (m *Manager) ParseToken(accessToken string) (string, string, error) {
 	})
 
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	claims, ok := token.Claims.(*TokenClaims)
 	if !ok {
-		return "", "", fmt.Errorf("error get token claims")
+		return "", "", "", fmt.Errorf("error get token claims")
 	}
 
-	return claims.Subject, claims.IP, err
+	return claims.SessionId, claims.Subject, claims.IP, err
 }
 
 func (m *Manager) NewRefreshToken() (string, error) {

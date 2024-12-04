@@ -19,9 +19,11 @@ func NewUserRepo(db *pgxpool.Pool) *UserRepo {
 	}
 }
 
+// TODO: поменять user_id на user_GUID и везде поменять логику
+
 func (r *UserRepo) Create(ctx context.Context, user types.User) error {
-	query := `INSERT INTO users (email, password) VALUES ($1, $2)`
-	_, err := r.pool.Exec(ctx, query, user.Email, user.Password)
+	query := `INSERT INTO users (user_uuid, email, password) VALUES ($1, $2, $3)`
+	_, err := r.pool.Exec(ctx, query, user.UserUUID, user.Email, user.Password)
 	// TODO: unique constraint error handle
 	if err != nil {
 		return fmt.Errorf("SQL: CreateUser: Exec(): %w", err)

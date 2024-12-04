@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
+	"time"
 )
 
 type Config struct {
 	DBConfig     DBConfig
 	ServerConfig ServerConfig
+	AuthConfig   AuthConfig
 }
 
 type DBConfig struct {
@@ -22,6 +24,11 @@ type DBConfig struct {
 
 type ServerConfig struct {
 	HTTPPort string `env:"HTTP_PORT"`
+}
+
+type AuthConfig struct {
+	AccessTokenTTL  time.Duration `end:"ACCESS_TOKEN_TTL"`
+	RefreshTokenTTL time.Duration `end:"REFRESH_TOKEN_TTL"`
 }
 
 func (s *ServerConfig) Address() string {
