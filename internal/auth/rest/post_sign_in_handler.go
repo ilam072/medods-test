@@ -14,8 +14,8 @@ type userSignIn struct {
 }
 
 type responseToken struct {
-	AccessToken  string
-	RefreshToken string
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func (h *Handler) SignInHandler(c *gin.Context) {

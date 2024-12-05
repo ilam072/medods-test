@@ -31,7 +31,7 @@ type Manager struct {
 	signingKey string
 }
 
-func New(signingKey string) (*Manager, error) {
+func NewManager(signingKey string) (*Manager, error) {
 	if signingKey == "" {
 		return nil, ErrEmptySigningKey
 	}

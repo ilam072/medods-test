@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/gin-gonic/gin"
 	"medods-test/internal/auth/types"
+	"net/http"
 )
 
 type UserService interface {
@@ -33,4 +34,8 @@ func New(auth *UseCase) *Handler {
 	api.POST("/auth/sign-in", h.SignInHandler)
 
 	return h
+}
+
+func (h *Handler) Handler() http.Handler {
+	return h.api.Handler()
 }

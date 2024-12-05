@@ -27,8 +27,9 @@ type ServerConfig struct {
 }
 
 type AuthConfig struct {
-	AccessTokenTTL  time.Duration `end:"ACCESS_TOKEN_TTL"`
-	RefreshTokenTTL time.Duration `end:"REFRESH_TOKEN_TTL"`
+	AccessTokenTTL  time.Duration `env:"ACCESS_TOKEN_TTL"`
+	RefreshTokenTTL time.Duration `env:"REFRESH_TOKEN_TTL"`
+	SigningKey      string        `env:"SIGNING_KEY"`
 }
 
 func (s *ServerConfig) Address() string {
