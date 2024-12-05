@@ -6,10 +6,10 @@ type response struct {
 	Message string `json:"message"`
 }
 
-func newResponse(c *gin.Context, statusCode int, message string) {
+func newResponse(c *gin.Context, statusCode int, msg string) {
 	c.AbortWithStatusJSON(
 		statusCode,
 		response{
-			message,
+			msg,
 		})
 }

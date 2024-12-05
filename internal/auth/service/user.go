@@ -57,7 +57,7 @@ func (u *User) SignUp(ctx context.Context, input types.UserDTO) error {
 	return nil
 }
 
-func (u *User) SingIn(ctx context.Context, input types.UserSignInDTO, IP string) (types.Tokens, error) {
+func (u *User) SingIn(ctx context.Context, input types.UserDTO, IP string) (types.Tokens, error) {
 	password, err := u.hasher.Hash(input.Password)
 	if err != nil {
 		return types.Tokens{}, err
@@ -93,6 +93,9 @@ func (u *User) CreateSession(ctx context.Context, userId int, IP string) (types.
 	}
 
 	hashToken, err := u.tokenManager.HashToken(tokens.RefreshToken)
+	if err != nil {
+		return tokens, err
+	}
 	session := types.Session{
 		SessionId:    sessionId,
 		UserId:       userId,

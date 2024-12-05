@@ -8,7 +8,7 @@ import (
 
 type UserService interface {
 	SignUp(ctx context.Context, input types.UserDTO) error
-	SingIn(ctx context.Context, input types.UserSignInDTO, IP string) (types.Tokens, error)
+	SingIn(ctx context.Context, input types.UserDTO, IP string) (types.Tokens, error)
 	CreateSession(ctx context.Context, userId int, IP string) (types.Tokens, error)
 }
 
@@ -23,10 +23,14 @@ type Handler struct {
 func New(auth *UseCase) *Handler {
 	api := gin.Default()
 
-	// init endpoints
-
-	return &Handler{
+	h := &Handler{
 		api:  api,
 		auth: auth,
 	}
+
+	// init endpoints
+	api.POST("/auth/sign-up", h.SignUpHandler)
+	api.POST("/auth/sign-in", h.SignInHandler)
+
+	return h
 }
