@@ -22,7 +22,7 @@ func NewSessionRepo(db *pgxpool.Pool) *SessionRepo {
 func (s *SessionRepo) CreateSession(ctx context.Context, session types.Session) error {
 	query := `INSERT INTO sessions (id, user_id, refresh_token, expires_at)
 					VALUES ($1, $2, $3, $4)`
-	_, err := s.pool.Exec(ctx, query, session.SessionId, session.UserId, session.ExpiresAt)
+	_, err := s.pool.Exec(ctx, query, session.SessionId, session.UserId, session.RefreshToken, session.ExpiresAt)
 	if err != nil {
 		return fmt.Errorf("SQL: CreateSession: Exec(): %w", err)
 	}

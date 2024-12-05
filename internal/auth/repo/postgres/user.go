@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"medods-test/internal/auth/types"
 )
@@ -19,6 +20,14 @@ func NewUserRepo(db *pgxpool.Pool) *UserRepo {
 	}
 }
 
+const (
+	ErrUniqueViolationCode = "23505"
+)
+
+var (
+	ErrEmailAlreadyExists = errors.New("such email already exists")
+)
+
 // TODO: поменять user_id на user_GUID и везде поменять логику
 
 func (r *UserRepo) Create(ctx context.Context, user types.User) error {
@@ -26,6 +35,12 @@ func (r *UserRepo) Create(ctx context.Context, user types.User) error {
 	_, err := r.pool.Exec(ctx, query, user.UserUUID, user.Email, user.Password)
 	// TODO: unique constraint error handle
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == ErrUniqueViolationCode {
+				return ErrEmailAlreadyExists
+			}
+		}
 		return fmt.Errorf("SQL: CreateUser: Exec(): %w", err)
 	}
 	return err
@@ -34,12 +49,13 @@ func (r *UserRepo) Create(ctx context.Context, user types.User) error {
 func (r *UserRepo) GetUserByCreds(ctx context.Context, email string, password string) (*types.User, error) {
 	user := types.User{}
 
-	query := `SELECT user_id, email, password 
+	query := `SELECT id, user_uuid, email, password 
 			  FROM users
 	          WHERE email = $1 AND password = $2`
 
 	if err := r.pool.QueryRow(ctx, query, email, password).Scan(
 		&user.UserId,
+		&user.UserUUID,
 		&user.Email,
 		&user.Password,
 	); err != nil {
@@ -55,11 +71,12 @@ func (r *UserRepo) GetUserByCreds(ctx context.Context, email string, password st
 func (r *UserRepo) GetUserByID(ctx context.Context, userId int) (*types.User, error) {
 	user := types.User{}
 
-	query := `SELECT email, password
+	query := `SELECT user_uuid, email, password
               FROM users
               WHERE user_id = $1`
 
 	if err := r.pool.QueryRow(ctx, query, userId).Scan(
+		&user.UserUUID,
 		&user.Email,
 		&user.Password,
 	); err != nil {

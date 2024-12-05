@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/google/uuid"
+	"medods-test/internal/auth/repo/postgres"
 	"medods-test/internal/auth/types"
 	"medods-test/pkg/auth"
 	"medods-test/pkg/hash"
@@ -12,7 +13,8 @@ import (
 )
 
 var (
-	ErrUserNotFound = errors.New("user not found")
+	ErrUserNotFound      = errors.New("user not found")
+	ErrUserAlreadyExists = errors.New("user already exists")
 )
 
 type UserRepo interface {
@@ -45,7 +47,14 @@ func (u *User) SignUp(ctx context.Context, input types.UserDTO) error {
 		Password: passwordHash,
 	}
 
-	return u.userrepo.Create(ctx, user)
+	if err = u.userrepo.Create(ctx, user); err != nil {
+		if errors.Is(err, postgres.ErrEmailAlreadyExists) {
+			return ErrUserAlreadyExists
+		}
+		return err
+	}
+
+	return nil
 }
 
 func (u *User) SingIn(ctx context.Context, input types.UserSignInDTO, IP string) (types.Tokens, error) {
