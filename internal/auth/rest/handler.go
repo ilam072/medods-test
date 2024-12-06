@@ -10,7 +10,7 @@ import (
 type UserService interface {
 	SignUp(ctx context.Context, input types.UserDTO) error
 	SingIn(ctx context.Context, input types.UserDTO, IP string) (types.Tokens, error)
-	CreateSession(ctx context.Context, userId int, IP string) (types.Tokens, error)
+	CreateSession(ctx context.Context, userId string, IP string) (types.Tokens, error)
 }
 
 type UseCase struct {

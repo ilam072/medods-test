@@ -20,14 +20,6 @@ func NewUserRepo(db *pgxpool.Pool) *UserRepo {
 	}
 }
 
-const (
-	ErrUniqueViolationCode = "23505"
-)
-
-var (
-	ErrEmailAlreadyExists = errors.New("such email already exists")
-)
-
 // TODO: поменять user_id на user_GUID и везде поменять логику
 
 func (r *UserRepo) Create(ctx context.Context, user types.User) error {
@@ -38,7 +30,7 @@ func (r *UserRepo) Create(ctx context.Context, user types.User) error {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == ErrUniqueViolationCode {
-				return ErrEmailAlreadyExists
+				return ErrUniqueContraintFailed
 			}
 		}
 		return fmt.Errorf("SQL: CreateUser: Exec(): %w", err)
@@ -49,12 +41,11 @@ func (r *UserRepo) Create(ctx context.Context, user types.User) error {
 func (r *UserRepo) GetUserByCreds(ctx context.Context, email string, password string) (*types.User, error) {
 	user := types.User{}
 
-	query := `SELECT id, user_uuid, email, password 
+	query := `SELECT user_uuid, email, password 
 			  FROM users
 	          WHERE email = $1 AND password = $2`
 
 	if err := r.pool.QueryRow(ctx, query, email, password).Scan(
-		&user.UserId,
 		&user.UserUUID,
 		&user.Email,
 		&user.Password,
@@ -68,14 +59,14 @@ func (r *UserRepo) GetUserByCreds(ctx context.Context, email string, password st
 	return &user, nil
 }
 
-func (r *UserRepo) GetUserByID(ctx context.Context, userId int) (*types.User, error) {
+func (r *UserRepo) GetUserByID(ctx context.Context, userUUID int) (*types.User, error) {
 	user := types.User{}
 
 	query := `SELECT user_uuid, email, password
               FROM users
-              WHERE user_id = $1`
+              WHERE user_uuid = $1`
 
-	if err := r.pool.QueryRow(ctx, query, userId).Scan(
+	if err := r.pool.QueryRow(ctx, query, userUUID).Scan(
 		&user.UserUUID,
 		&user.Email,
 		&user.Password,

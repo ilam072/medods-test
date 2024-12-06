@@ -4,17 +4,22 @@ import (
 	"context"
 	"errors"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/bcrypt"
 	"medods-test/internal/auth/repo/postgres"
 	"medods-test/internal/auth/types"
 	"medods-test/pkg/auth"
 	"medods-test/pkg/hash"
-	"strconv"
 	"time"
 )
 
 var (
-	ErrUserNotFound      = errors.New("user not found")
-	ErrUserAlreadyExists = errors.New("user already exists")
+	ErrUserNotFound            = errors.New("user not found")
+	ErrUserAlreadyExists       = errors.New("user already exists")
+	ErrSessionNotFound         = errors.New("session not found")
+	ErrRefreshTokenExpired     = errors.New("refresh token is expired")
+	ErrInvalidRefreshToken     = errors.New("invalid refresh token")
+	ErrRefreshTokenAlreadyUsed = errors.New("refresh token already used")
 )
 
 type UserRepo interface {
@@ -48,7 +53,7 @@ func (u *User) SignUp(ctx context.Context, input types.UserDTO) error {
 	}
 
 	if err = u.userrepo.Create(ctx, user); err != nil {
-		if errors.Is(err, postgres.ErrEmailAlreadyExists) {
+		if errors.Is(err, postgres.ErrUniqueContraintFailed) {
 			return ErrUserAlreadyExists
 		}
 		return err
@@ -71,10 +76,10 @@ func (u *User) SingIn(ctx context.Context, input types.UserDTO, IP string) (type
 	if user == nil {
 		return types.Tokens{}, ErrUserNotFound
 	}
-	return u.CreateSession(ctx, user.UserId, IP)
+	return u.CreateSession(ctx, user.UserUUID, IP) // todo: refactor
 }
 
-func (u *User) CreateSession(ctx context.Context, userId int, IP string) (types.Tokens, error) {
+func (u *User) CreateSession(ctx context.Context, userId string, IP string) (types.Tokens, error) {
 	var (
 		tokens types.Tokens
 		err    error
@@ -82,7 +87,7 @@ func (u *User) CreateSession(ctx context.Context, userId int, IP string) (types.
 
 	sessionId := uuid.NewString()
 
-	tokens.AccessToken, err = u.tokenManager.NewJWT(sessionId, strconv.Itoa(userId), IP, u.accessTokenTTL)
+	tokens.AccessToken, err = u.tokenManager.NewJWT(sessionId, userId, IP, u.accessTokenTTL) //todo: refactor
 	if err != nil {
 		return tokens, err
 	}
@@ -105,4 +110,70 @@ func (u *User) CreateSession(ctx context.Context, userId int, IP string) (types.
 
 	err = u.sessionrepo.CreateSession(ctx, session)
 	return tokens, err
+}
+
+func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToken, refreshToken string) (types.Tokens, error) {
+	// Парсим AccessToken и получаем SessionId
+	// По этому SessionId получаем Session с захешированным RefreshToken из БД
+	// Декодируем RefreshToken и сравниваем его с RefreshToken из RequestBody, для проверки, что токены взаимосвязаны
+	// Проверяю RefreshToken на "был ли он использован" (used bool)
+	// Если да, то отправляю ошибку ErrRefreshTokenNotValid
+	// Если нет, то ставлю user = true и продолжаю код
+	// Проверяю RefreshToken на "истек ли он"
+	// Сравниваем новый и старый IP – при необоходимости отправляем email warning
+	// Все норм: создаю новый RefreshToken в базе
+
+	// HashAndCompare
+	sessionId, userId, oldClientIP, err := u.tokenManager.ParseToken(accessToken)
+	if err != nil {
+		return types.Tokens{}, err
+	}
+
+	tx := pgxpool.Tx{}
+	ttx, err := tx.Begin(ctx)
+	if err != nil {
+		return types.Tokens{}, err
+	}
+	defer ttx.Rollback(ctx)
+
+	session, err := u.sessionrepo.GetSessionById(ctx, sessionId)
+	if err != nil {
+		return types.Tokens{}, err
+	}
+	if session == nil {
+		return types.Tokens{}, ErrSessionNotFound
+	}
+
+	if err = bcrypt.CompareHashAndPassword([]byte(session.RefreshToken), []byte(refreshToken)); err != nil {
+		return types.Tokens{}, ErrInvalidRefreshToken
+	}
+
+	if !session.Used {
+		return types.Tokens{}, ErrRefreshTokenAlreadyUsed
+	}
+
+	if session.IsRefreshTokenExpired() {
+		return types.Tokens{}, ErrRefreshTokenExpired
+	}
+
+	if oldClientIP != newClientIP {
+		// todo: sending email warning
+		panic("EMAIL WARNING СДЕЛАЙ!!!")
+	}
+
+	// todo: в конце?
+	if err = u.sessionrepo.SetUsed(ctx, session.SessionId); err != nil {
+		return types.Tokens{}, err
+	}
+
+	tokens, err := u.CreateSession(ctx, userId, newClientIP)
+	if err != nil {
+		return types.Tokens{}, err
+	}
+
+	if err = ttx.Commit(ctx); err != nil {
+		return types.Tokens{}, err
+	}
+
+	return tokens, nil
 }

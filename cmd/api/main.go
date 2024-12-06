@@ -59,3 +59,8 @@ func main() {
 	}
 
 }
+
+/*
+TODO: достаю session_uuid из payload access токена,
+потом достаю session_uuid из ДБ по refresh токену и сравниваю uuid's
+*/

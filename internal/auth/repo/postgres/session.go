@@ -2,7 +2,9 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"medods-test/internal/auth/types"
 )
@@ -20,11 +22,46 @@ func NewSessionRepo(db *pgxpool.Pool) *SessionRepo {
 }
 
 func (s *SessionRepo) CreateSession(ctx context.Context, session types.Session) error {
-	query := `INSERT INTO sessions (id, user_id, refresh_token, expires_at)
-					VALUES ($1, $2, $3, $4)`
-	_, err := s.pool.Exec(ctx, query, session.SessionId, session.UserId, session.RefreshToken, session.ExpiresAt)
+	query := `INSERT INTO sessions (id, user_uuid, refresh_token, expires_at, used)
+					VALUES ($1, $2, $3, $4, $5)`
+	_, err := s.pool.Exec(ctx, query, session.SessionId, session.UserId, session.RefreshToken, session.ExpiresAt, session.Used)
 	if err != nil {
 		return fmt.Errorf("SQL: CreateSession: Exec(): %w", err)
 	}
 	return err
+}
+
+func (s *SessionRepo) GetSessionById(ctx context.Context, sessionId string) (*types.Session, error) {
+	// проверка на userid ???
+	session := types.Session{}
+	query := `SELECT id, user_uuid, refresh_token, expires_at, used
+			  FROM sessions
+	          WHERE id = $1`
+
+	if err := s.pool.QueryRow(ctx, query, sessionId).Scan(
+		&session.SessionId,
+		&session.UserId,
+		&session.RefreshToken,
+		&session.ExpiresAt,
+		&session.Used,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf(`SQL: GetUserByCreds: Scan(): %w`, err)
+	}
+
+	return &session, nil
+}
+
+func (s *SessionRepo) SetUsed(ctx context.Context, sessionId string) error {
+	query := `UPDATE sessions
+				SET used = true
+				WHERE id = $1`
+	_, err := s.pool.Exec(ctx, query, sessionId)
+	if err != nil {
+		return fmt.Errorf(`SQL: SetUsed: Exec(): %w`, err)
+	}
+
+	return nil
 }
