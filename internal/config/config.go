@@ -11,6 +11,7 @@ type Config struct {
 	DBConfig     DBConfig
 	ServerConfig ServerConfig
 	AuthConfig   AuthConfig
+	SMTPConfig   SMTPConfig
 }
 
 type DBConfig struct {
@@ -30,6 +31,12 @@ type AuthConfig struct {
 	AccessTokenTTL  time.Duration `env:"ACCESS_TOKEN_TTL"`
 	RefreshTokenTTL time.Duration `env:"REFRESH_TOKEN_TTL"`
 	SigningKey      string        `env:"SIGNING_KEY"`
+}
+
+type SMTPConfig struct {
+	Host string `env:"STMP_HOST"`
+	Port string `env:"STMP_PORT"`
+	From string `env:"STMP_FROM"`
 }
 
 func (s *ServerConfig) Address() string {

@@ -6,7 +6,9 @@ import (
 	"time"
 )
 
-const salt = "asqlasaj"
+const (
+	salt = "asqlasaj"
+)
 
 type Repository struct {
 	UserRepo    UserRepo

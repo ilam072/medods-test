@@ -9,6 +9,7 @@ import (
 	"medods-test/internal/auth/repo/postgres"
 	"medods-test/internal/auth/types"
 	"medods-test/pkg/auth"
+	"medods-test/pkg/email"
 	"medods-test/pkg/hash"
 	"time"
 )
@@ -25,7 +26,7 @@ var (
 type UserRepo interface {
 	Create(ctx context.Context, user types.User) error
 	GetUserByCreds(ctx context.Context, email string, password string) (*types.User, error)
-	GetUserByID(ctx context.Context, userId int) (*types.User, error)
+	GetUserByID(ctx context.Context, userId string) (*types.User, error)
 }
 
 type User struct {
@@ -34,6 +35,7 @@ type User struct {
 
 	hasher       hash.PasswordHasher
 	tokenManager auth.TokenManager
+	stmp         email.Sender
 
 	accessTokenTTL  time.Duration
 	refreshTokenTTL time.Duration
@@ -124,6 +126,7 @@ func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToke
 	// Все норм: создаю новый RefreshToken в базе
 
 	// HashAndCompare
+	//todo: ПРОВЕРИТЬ ВСЕ
 	sessionId, userId, oldClientIP, err := u.tokenManager.ParseToken(accessToken)
 	if err != nil {
 		return types.Tokens{}, err
@@ -134,6 +137,7 @@ func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToke
 	if err != nil {
 		return types.Tokens{}, err
 	}
+
 	defer ttx.Rollback(ctx)
 
 	session, err := u.sessionrepo.GetSessionById(ctx, sessionId)
@@ -156,11 +160,6 @@ func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToke
 		return types.Tokens{}, ErrRefreshTokenExpired
 	}
 
-	if oldClientIP != newClientIP {
-		// todo: sending email warning
-		panic("EMAIL WARNING СДЕЛАЙ!!!")
-	}
-
 	// todo: в конце?
 	if err = u.sessionrepo.SetUsed(ctx, session.SessionId); err != nil {
 		return types.Tokens{}, err
@@ -173,6 +172,25 @@ func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToke
 
 	if err = ttx.Commit(ctx); err != nil {
 		return types.Tokens{}, err
+	}
+
+	if oldClientIP != newClientIP {
+		user, err := u.userrepo.GetUserByID(ctx, userId)
+		if err != nil {
+			return types.Tokens{}, err
+		}
+
+		send := email.SendEmailInput{
+			To:      user.Email,
+			Subject: "Внимание!",
+			Body: `<h1>Внимание! Смена IP-адреса</h1>
+<p>Мы заметили, что ваш IP-адрес изменился.</p>
+<p>Если вы не осуществляли вход с этого IP, пожалуйста, свяжитесь с нашей службой поддержки или смените пароль</p>
+<p>С уважением,<br>Команда поддержки</p>`,
+		}
+		if err = u.stmp.Send(send); err != nil {
+			return types.Tokens{}, err
+		}
 	}
 
 	return tokens, nil

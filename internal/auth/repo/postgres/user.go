@@ -59,7 +59,7 @@ func (r *UserRepo) GetUserByCreds(ctx context.Context, email string, password st
 	return &user, nil
 }
 
-func (r *UserRepo) GetUserByID(ctx context.Context, userUUID int) (*types.User, error) {
+func (r *UserRepo) GetUserByID(ctx context.Context, userUUID string) (*types.User, error) {
 	user := types.User{}
 
 	query := `SELECT user_uuid, email, password
