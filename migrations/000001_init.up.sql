@@ -9,7 +9,7 @@ CREATE TABLE users
 CREATE TABLE sessions
 (
     id UUID NOT NULL UNIQUE,
-    user_uuid UUID NOT NULL UNIQUE,
+    user_uuid UUID NOT NULL,
     --user_id INT,
     refresh_token TEXT NOT NULL UNIQUE,
     expires_at TIMESTAMP

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 	"medods-test/internal/auth/repo/postgres"
 	"medods-test/internal/auth/types"
@@ -114,6 +113,39 @@ func (u *User) CreateSession(ctx context.Context, userId string, IP string) (typ
 	return tokens, err
 }
 
+func (u *User) CreateSessionAndSetUsed(ctx context.Context, userId string, IP string, usedSessionId string) (types.Tokens, error) {
+	var (
+		tokens types.Tokens
+		err    error
+	)
+
+	sessionId := uuid.NewString()
+
+	tokens.AccessToken, err = u.tokenManager.NewJWT(sessionId, userId, IP, u.accessTokenTTL) //todo: refactor
+	if err != nil {
+		return tokens, err
+	}
+
+	tokens.RefreshToken, err = u.tokenManager.NewRefreshToken()
+	if err != nil {
+		return tokens, err
+	}
+
+	hashToken, err := u.tokenManager.HashToken(tokens.RefreshToken)
+	if err != nil {
+		return tokens, err
+	}
+	session := types.Session{
+		SessionId:    sessionId,
+		UserId:       userId,
+		RefreshToken: hashToken,
+		ExpiresAt:    time.Now().Add(u.refreshTokenTTL),
+	}
+
+	err = u.sessionrepo.CreateAndSetUsed(ctx, session, usedSessionId)
+	return tokens, err
+}
+
 func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToken, refreshToken string) (types.Tokens, error) {
 	// Парсим AccessToken и получаем SessionId
 	// По этому SessionId получаем Session с захешированным RefreshToken из БД
@@ -131,14 +163,6 @@ func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToke
 	if err != nil {
 		return types.Tokens{}, err
 	}
-
-	tx := pgxpool.Tx{}
-	ttx, err := tx.Begin(ctx)
-	if err != nil {
-		return types.Tokens{}, err
-	}
-
-	defer ttx.Rollback(ctx)
 
 	session, err := u.sessionrepo.GetSessionById(ctx, sessionId)
 	if err != nil {
@@ -165,12 +189,8 @@ func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToke
 		return types.Tokens{}, err
 	}
 
-	tokens, err := u.CreateSession(ctx, userId, newClientIP)
+	tokens, err := u.CreateSessionAndSetUsed(ctx, userId, newClientIP, session.SessionId)
 	if err != nil {
-		return types.Tokens{}, err
-	}
-
-	if err = ttx.Commit(ctx); err != nil {
 		return types.Tokens{}, err
 	}
 
@@ -180,10 +200,10 @@ func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToke
 			return types.Tokens{}, err
 		}
 
-		send := email.SendEmailInput{
-			To:      user.Email,
-			Subject: "Внимание!",
-			Body: `<h1>Внимание! Смена IP-адреса</h1>
+		send := email.Send{
+			Recipient: user.Email,
+			Subject:   "Внимание!",
+			Body: `<h1>Смена IP-адреса</h1>
 <p>Мы заметили, что ваш IP-адрес изменился.</p>
 <p>Если вы не осуществляли вход с этого IP, пожалуйста, свяжитесь с нашей службой поддержки или смените пароль</p>
 <p>С уважением,<br>Команда поддержки</p>`,

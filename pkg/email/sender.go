@@ -4,18 +4,18 @@ import (
 	"errors"
 )
 
-type SendEmailInput struct {
-	To      string
-	Subject string
-	Body    string
+type Send struct {
+	Recipient string
+	Subject   string
+	Body      string
 }
 
 type Sender interface {
-	Send(input SendEmailInput) error
+	Send(input Send) error
 }
 
-func (e *SendEmailInput) Validate() error {
-	if e.To == "" {
+func (e *Send) Validate() error {
+	if e.Recipient == "" {
 		return errors.New("empty to")
 	}
 
@@ -23,7 +23,7 @@ func (e *SendEmailInput) Validate() error {
 		return errors.New("empty subject/body")
 	}
 
-	if !IsEmailValid(e.To) {
+	if !IsEmailValid(e.Recipient) {
 		return errors.New("invalid to email")
 	}
 

@@ -21,14 +21,14 @@ func NewSMTPSender(from, pass, host string, port int) (*SMTPSender, error) {
 	return &SMTPSender{from: from, pass: pass, host: host, port: port}, nil
 }
 
-func (s *SMTPSender) Send(input email.SendEmailInput) error {
+func (s *SMTPSender) Send(input email.Send) error {
 	if err := input.Validate(); err != nil {
 		return err
 	}
 
 	msg := gomail.NewMessage()
 	msg.SetHeader("From", s.from)
-	msg.SetHeader("To", input.To)
+	msg.SetHeader("Recipient", input.Recipient)
 	msg.SetHeader("Subject", input.Subject)
 	msg.SetBody("text/html", input.Body)
 

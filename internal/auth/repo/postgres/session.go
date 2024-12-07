@@ -28,7 +28,7 @@ func (s *SessionRepo) CreateSession(ctx context.Context, session types.Session) 
 	if err != nil {
 		return fmt.Errorf("SQL: CreateSession: Exec(): %w", err)
 	}
-	return err
+	return nil
 }
 
 func (s *SessionRepo) GetSessionById(ctx context.Context, sessionId string) (*types.Session, error) {
@@ -64,4 +64,39 @@ func (s *SessionRepo) SetUsed(ctx context.Context, sessionId string) error {
 	}
 
 	return nil
+}
+
+func (s *SessionRepo) CreateAndSetUsed(ctx context.Context, session types.Session, usedSessionId string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf(`SQL: CreateAndSetUsed: Begin(): %w`, err)
+	}
+
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	setUsedQuery := `UPDATE sessions
+				SET used = true
+				WHERE id = $1`
+	if _, err = tx.Exec(ctx, setUsedQuery, usedSessionId); err != nil {
+		return fmt.Errorf(`SQL: CreateAndSetUsed: Exec(): %w`, err)
+	}
+
+	createQuery := `INSERT INTO sessions (id, user_uuid, refresh_token, expires_at, used)
+					VALUES ($1, $2, $3, $4, $5)`
+
+	_, err = tx.Exec(ctx, createQuery, session.SessionId, session.UserId, session.RefreshToken, session.ExpiresAt, session.Used)
+	if err != nil {
+		return fmt.Errorf(`SQL: CreateAndSetUsed: Exec(): %w`, err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf(`SQL: CreateAndSetUsed: Commit(): %w`, err)
+	}
+
+	return nil
+
 }
