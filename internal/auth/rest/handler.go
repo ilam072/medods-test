@@ -11,6 +11,7 @@ type UserService interface {
 	SignUp(ctx context.Context, input types.UserDTO) error
 	SingIn(ctx context.Context, input types.UserDTO, IP string) (types.Tokens, error)
 	CreateSession(ctx context.Context, userId string, IP string) (types.Tokens, error)
+	RefreshTokens(ctx context.Context, newClientIP string, accessToken, refreshToken string) (types.Tokens, error)
 }
 
 type UseCase struct {

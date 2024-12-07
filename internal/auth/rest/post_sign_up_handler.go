@@ -29,7 +29,7 @@ func (h *Handler) SignUpHandler(c *gin.Context) {
 			return
 		}
 
-		newResponse(c, http.StatusInternalServerError, err.Error())
+		newResponse(c, http.StatusInternalServerError, "Something went wrong. Try again later!")
 		return
 	}
 
