@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"medods-test/internal/auth/service"
 	"medods-test/internal/auth/types"
+	"medods-test/pkg/logger"
 	"net/http"
 )
 
@@ -21,6 +22,7 @@ type responseToken struct {
 func (h *Handler) SignInHandler(c *gin.Context) {
 	var input userSignIn
 	if err := c.BindJSON(&input); err != nil {
+		logger.Errorf("failed to decode request body: %s", err.Error())
 		newResponse(c, http.StatusBadRequest, "invalid body request")
 		return
 	}
@@ -31,6 +33,7 @@ func (h *Handler) SignInHandler(c *gin.Context) {
 		Password: input.Password,
 	}, ip)
 	if err != nil {
+		logger.Errorf("failed to sign in: (ip: %s, email: %s): %s", ip, input.Email, err.Error())
 		if errors.Is(err, service.ErrUserNotFound) {
 			newResponse(c, http.StatusBadRequest, err.Error())
 			return

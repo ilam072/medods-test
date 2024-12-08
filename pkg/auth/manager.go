@@ -14,10 +14,12 @@ var (
 	ErrEmptySigningKey = errors.New("signing key is empty")
 )
 
+var validationDate = time.Date(2023, time.December, 7, 0, 0, 0, 0, time.UTC)
+
 type TokenClaims struct {
 	jwt.RegisteredClaims
 	IP        string `json:"ip"`
-	SessionId string
+	SessionId string `json:"session_id"`
 }
 
 type TokenManager interface {
@@ -53,12 +55,14 @@ func (m *Manager) NewJWT(sessionId, userId, userIP string, ttl time.Duration) (s
 }
 
 func (m *Manager) ParseToken(accessToken string) (string, string, string, error) {
-	token, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(accessToken, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(m.signingKey), nil
-	})
+	}, jwt.WithTimeFunc(func() time.Time {
+		return validationDate
+	}))
 
 	if err != nil {
 		return "", "", "", err

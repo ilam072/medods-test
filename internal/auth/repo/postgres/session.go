@@ -9,8 +9,6 @@ import (
 	"medods-test/internal/auth/types"
 )
 
-// TODO: CreateSession
-
 type SessionRepo struct {
 	pool *pgxpool.Pool
 }
@@ -32,7 +30,6 @@ func (s *SessionRepo) CreateSession(ctx context.Context, session types.Session) 
 }
 
 func (s *SessionRepo) GetSessionById(ctx context.Context, sessionId string) (*types.Session, error) {
-	// проверка на userid ???
 	session := types.Session{}
 	query := `SELECT id, user_uuid, refresh_token, expires_at, used
 			  FROM sessions
@@ -98,5 +95,4 @@ func (s *SessionRepo) CreateAndSetUsed(ctx context.Context, session types.Sessio
 	}
 
 	return nil
-
 }

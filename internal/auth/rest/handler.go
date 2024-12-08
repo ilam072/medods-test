@@ -30,9 +30,10 @@ func New(auth *UseCase) *Handler {
 		auth: auth,
 	}
 
-	// init endpoints
+	// Init endpoints
 	api.POST("/auth/sign-up", h.SignUpHandler)
 	api.POST("/auth/sign-in", h.SignInHandler)
+	api.POST("/auth/refresh-tokens", h.RefreshTokensHandler)
 
 	return h
 }

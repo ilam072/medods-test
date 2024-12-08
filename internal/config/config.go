@@ -34,9 +34,10 @@ type AuthConfig struct {
 }
 
 type SMTPConfig struct {
-	Host string `env:"STMP_HOST"`
-	Port string `env:"STMP_PORT"`
-	From string `env:"STMP_FROM"`
+	Host string `env:"SMTP_HOST"`
+	Pass string `end:"SMTP_PASS"`
+	Port int    `env:"SMTP_PORT"`
+	From string `env:"SMTP_FROM"`
 }
 
 func (s *ServerConfig) Address() string {

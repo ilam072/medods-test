@@ -10,6 +10,7 @@ import (
 	"medods-test/pkg/auth"
 	"medods-test/pkg/email"
 	"medods-test/pkg/hash"
+	"medods-test/pkg/logger"
 	"time"
 )
 
@@ -34,7 +35,7 @@ type User struct {
 
 	hasher       hash.PasswordHasher
 	tokenManager auth.TokenManager
-	stmp         email.Sender
+	smtp         email.Sender
 
 	accessTokenTTL  time.Duration
 	refreshTokenTTL time.Duration
@@ -43,6 +44,7 @@ type User struct {
 func (u *User) SignUp(ctx context.Context, input types.UserDTO) error {
 	passwordHash, err := u.hasher.Hash(input.Password)
 	if err != nil {
+		logger.Errorf("failed to hash password: %s", err)
 		return err
 	}
 
@@ -54,30 +56,33 @@ func (u *User) SignUp(ctx context.Context, input types.UserDTO) error {
 	}
 
 	if err = u.userrepo.Create(ctx, user); err != nil {
+		logger.Errorf("failed to create user: %s", err)
 		if errors.Is(err, postgres.ErrUniqueContraintFailed) {
 			return ErrUserAlreadyExists
 		}
 		return err
-	}
 
+	}
 	return nil
 }
 
 func (u *User) SingIn(ctx context.Context, input types.UserDTO, IP string) (types.Tokens, error) {
 	password, err := u.hasher.Hash(input.Password)
 	if err != nil {
+		logger.Errorf("failed to hash password: %s", err)
 		return types.Tokens{}, err
 	}
 
 	user, err := u.userrepo.GetUserByCreds(ctx, input.Email, password)
 	if err != nil {
+		logger.Errorf("failed to get user: %s", err)
 		return types.Tokens{}, err
 	}
 
 	if user == nil {
 		return types.Tokens{}, ErrUserNotFound
 	}
-	return u.CreateSession(ctx, user.UserUUID, IP) // todo: refactor
+	return u.CreateSession(ctx, user.UserUUID, IP)
 }
 
 func (u *User) CreateSession(ctx context.Context, userId string, IP string) (types.Tokens, error) {
@@ -88,18 +93,21 @@ func (u *User) CreateSession(ctx context.Context, userId string, IP string) (typ
 
 	sessionId := uuid.NewString()
 
-	tokens.AccessToken, err = u.tokenManager.NewJWT(sessionId, userId, IP, u.accessTokenTTL) //todo: refactor
+	tokens.AccessToken, err = u.tokenManager.NewJWT(sessionId, userId, IP, u.accessTokenTTL)
 	if err != nil {
+		logger.Errorf("failed to create new access token: %s", err)
 		return tokens, err
 	}
 
 	tokens.RefreshToken, err = u.tokenManager.NewRefreshToken()
 	if err != nil {
+		logger.Errorf("failed to create new refresh token: %s", err)
 		return tokens, err
 	}
 
 	hashToken, err := u.tokenManager.HashToken(tokens.RefreshToken)
 	if err != nil {
+		logger.Errorf("failed to hash refresh token: %s", err)
 		return tokens, err
 	}
 	session := types.Session{
@@ -110,10 +118,12 @@ func (u *User) CreateSession(ctx context.Context, userId string, IP string) (typ
 	}
 
 	err = u.sessionrepo.CreateSession(ctx, session)
+
+	logger.Errorf("failed to create session: %s", err)
 	return tokens, err
 }
 
-func (u *User) CreateSessionAndSetUsed(ctx context.Context, userId string, IP string, usedSessionId string) (types.Tokens, error) {
+func (u *User) CreateNewSessionAndSetOldUsed(ctx context.Context, userId string, IP string, usedSessionId string) (types.Tokens, error) {
 	var (
 		tokens types.Tokens
 		err    error
@@ -121,18 +131,21 @@ func (u *User) CreateSessionAndSetUsed(ctx context.Context, userId string, IP st
 
 	sessionId := uuid.NewString()
 
-	tokens.AccessToken, err = u.tokenManager.NewJWT(sessionId, userId, IP, u.accessTokenTTL) //todo: refactor
+	tokens.AccessToken, err = u.tokenManager.NewJWT(sessionId, userId, IP, u.accessTokenTTL)
 	if err != nil {
+		logger.Errorf("failed to create new access token: %s", err)
 		return tokens, err
 	}
 
 	tokens.RefreshToken, err = u.tokenManager.NewRefreshToken()
 	if err != nil {
+		logger.Errorf("failed to create refresh token: %s", err)
 		return tokens, err
 	}
 
 	hashToken, err := u.tokenManager.HashToken(tokens.RefreshToken)
 	if err != nil {
+		logger.Errorf("failed to hash refresh token: %s", err)
 		return tokens, err
 	}
 	session := types.Session{
@@ -143,29 +156,20 @@ func (u *User) CreateSessionAndSetUsed(ctx context.Context, userId string, IP st
 	}
 
 	err = u.sessionrepo.CreateAndSetUsed(ctx, session, usedSessionId)
+	logger.Error(err)
 	return tokens, err
 }
 
 func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToken, refreshToken string) (types.Tokens, error) {
-	// Парсим AccessToken и получаем SessionId
-	// По этому SessionId получаем Session с захешированным RefreshToken из БД
-	// Декодируем RefreshToken и сравниваем его с RefreshToken из RequestBody, для проверки, что токены взаимосвязаны
-	// Проверяю RefreshToken на "был ли он использован" (used bool)
-	// Если да, то отправляю ошибку ErrRefreshTokenNotValid
-	// Если нет, то ставлю user = true и продолжаю код
-	// Проверяю RefreshToken на "истек ли он"
-	// Сравниваем новый и старый IP – при необоходимости отправляем email warning
-	// Все норм: создаю новый RefreshToken в базе
-
-	// HashAndCompare
-	//todo: ПРОВЕРИТЬ ВСЕ
 	sessionId, userId, oldClientIP, err := u.tokenManager.ParseToken(accessToken)
 	if err != nil {
+		logger.Errorf("failed to parse jwt token: %s", err)
 		return types.Tokens{}, err
 	}
 
 	session, err := u.sessionrepo.GetSessionById(ctx, sessionId)
 	if err != nil {
+		logger.Errorf("failed to get session by id: %s", err)
 		return types.Tokens{}, err
 	}
 	if session == nil {
@@ -173,23 +177,21 @@ func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToke
 	}
 
 	if err = bcrypt.CompareHashAndPassword([]byte(session.RefreshToken), []byte(refreshToken)); err != nil {
+		logger.Error(err)
 		return types.Tokens{}, ErrInvalidRefreshToken
 	}
 
-	if !session.Used {
+	if session.Used {
+		logger.Error(ErrRefreshTokenAlreadyUsed)
 		return types.Tokens{}, ErrRefreshTokenAlreadyUsed
 	}
 
 	if session.IsRefreshTokenExpired() {
+		logger.Error(ErrRefreshTokenExpired)
 		return types.Tokens{}, ErrRefreshTokenExpired
 	}
 
-	// todo: в конце?
-	if err = u.sessionrepo.SetUsed(ctx, session.SessionId); err != nil {
-		return types.Tokens{}, err
-	}
-
-	tokens, err := u.CreateSessionAndSetUsed(ctx, userId, newClientIP, session.SessionId)
+	tokens, err := u.CreateNewSessionAndSetOldUsed(ctx, userId, newClientIP, session.SessionId)
 	if err != nil {
 		return types.Tokens{}, err
 	}
@@ -197,6 +199,7 @@ func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToke
 	if oldClientIP != newClientIP {
 		user, err := u.userrepo.GetUserByID(ctx, userId)
 		if err != nil {
+			logger.Errorf("failed to get user by id: %s", err.Error())
 			return types.Tokens{}, err
 		}
 
@@ -208,7 +211,8 @@ func (u *User) RefreshTokens(ctx context.Context, newClientIP string, accessToke
 <p>Если вы не осуществляли вход с этого IP, пожалуйста, свяжитесь с нашей службой поддержки или смените пароль</p>
 <p>С уважением,<br>Команда поддержки</p>`,
 		}
-		if err = u.stmp.Send(send); err != nil {
+		if err = u.smtp.Send(send); err != nil {
+			logger.Errorf("failed to send email warning: %s", err.Error())
 			return types.Tokens{}, err
 		}
 	}

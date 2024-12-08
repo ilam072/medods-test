@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"medods-test/internal/auth/service"
 	"medods-test/internal/auth/types"
+	"medods-test/pkg/logger"
 	"net/http"
 )
 
@@ -16,6 +17,7 @@ type userSignUp struct {
 func (h *Handler) SignUpHandler(c *gin.Context) {
 	var input userSignUp
 	if err := c.BindJSON(&input); err != nil {
+		logger.Errorf("failed to decode request body: %s", err.Error())
 		newResponse(c, http.StatusBadRequest, "invalid body request")
 		return
 	}
@@ -24,6 +26,7 @@ func (h *Handler) SignUpHandler(c *gin.Context) {
 		Email:    input.Email,
 		Password: input.Password,
 	}); err != nil {
+		logger.Errorf("failed to sign up: %s", err.Error())
 		if errors.Is(err, service.ErrUserAlreadyExists) {
 			newResponse(c, http.StatusBadRequest, err.Error())
 			return
